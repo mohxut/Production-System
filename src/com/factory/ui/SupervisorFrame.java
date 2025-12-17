@@ -39,9 +39,10 @@ public class SupervisorFrame extends JFrame {
         JButton logoutBtn = createButton("Logout", 260);
 
         logoutBtn.addActionListener(e -> {
-            new LoginFrame(authService).setVisible(true);
+            new LoginFrame(authService, null).setVisible(true);
             dispose();
         });
+
 
         panel.add(inventoryBtn);
         panel.add(tasksBtn);

@@ -2,6 +2,7 @@ package com.factory.ui;
 
 import com.factory.model.User;
 import com.factory.service.AuthService;
+import com.factory.AppContext;
 
 import javax.swing.*;
 import java.awt.*;
@@ -9,9 +10,11 @@ import java.awt.*;
 public class LoginFrame extends JFrame {
 
     private AuthService authService;
+    private AppContext ctx; // NEW
 
-    public LoginFrame(AuthService authService) {
+    public LoginFrame(AuthService authService, AppContext ctx) {
         this.authService = authService;
+        this.ctx = ctx;
 
         setTitle("PRODUCTION SYSTEM - Login");
         setSize(420, 300);
@@ -75,10 +78,14 @@ public class LoginFrame extends JFrame {
                 return;
             }
 
-            if (user.getRole().toString().equals("ADMIN")) {
-                new AdminFrame(user, authService).setVisible(true);
-            } else {
-                new SupervisorFrame(user, authService).setVisible(true);
+            switch (user.getRole()) {
+                case ADMIN:
+                    new AdminFrame(user, authService).setVisible(true);
+                    break;
+
+                case SUPERVISOR:
+                    new SuperManagerFrame(user, authService, ctx).setVisible(true);
+                    break;
             }
 
             dispose();
