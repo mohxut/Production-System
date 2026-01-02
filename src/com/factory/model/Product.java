@@ -41,10 +41,7 @@ public class Product {
     }
 
     public void removeIngredient(String itemId) {
-        if(recipe.containsKey(itemId))
-            recipe.remove(itemId);
-        else
-            System.out.println("The Item is not even there.");
+        recipe.remove(itemId);
     }
 
     @Override

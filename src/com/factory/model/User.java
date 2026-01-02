@@ -2,10 +2,10 @@
 
     public class User {
         private String username;
-        private String passwordHash;
         private Role role;
+        private String passwordHash;
 
-        public User(String username, String passwordHash, Role role) {
+        public User(String usernam ,String passwordHash, Role role) {
             this.username = username;
             this.passwordHash = passwordHash;
             this.role = role;

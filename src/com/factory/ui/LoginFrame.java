@@ -3,16 +3,32 @@ package com.factory.ui;
 import com.factory.model.User;
 import com.factory.service.AuthService;
 import com.factory.AppContext;
+import com.factory.persistence.MaterialRepository;
 
 import javax.swing.*;
 import java.awt.*;
 
 public class LoginFrame extends JFrame {
 
+    private  MaterialRepository MatRepo;
     private AuthService authService;
     private AppContext ctx; // NEW
 
-    public LoginFrame(AuthService authService, AppContext ctx) {
+    public LoginFrame(AuthService authService, MaterialRepository MatRepo   , AppContext ctx) {
+        this.authService = authService;
+        this.ctx = ctx;
+        this.MatRepo = MatRepo;
+
+        setTitle("PRODUCTION SYSTEM - Login");
+        setSize(420, 300);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setResizable(false);
+
+        initUI();
+    }
+
+    public LoginFrame(AuthService authService , AppContext ctx) {
         this.authService = authService;
         this.ctx = ctx;
 
@@ -80,7 +96,7 @@ public class LoginFrame extends JFrame {
 
             switch (user.getRole()) {
                 case ADMIN:
-                    new AdminFrame(user, authService).setVisible(true);
+                    new AdminFrame(user, MatRepo  ,authService).setVisible(true);
                     break;
 
                 case SUPERVISOR:

@@ -2,15 +2,21 @@ package com.factory.ui;
 
 import com.factory.AppContext;
 import com.factory.model.ProductLine;
+import com.factory.model.ProductionLineStatus;
 import com.factory.model.Task;
 import com.factory.service.AuthService;
 import com.factory.model.User;
+import com.factory.persistence.MaterialRepository;
+import com.factory.persistence.ProductRepository;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.List;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class SuperManagerFrame extends JFrame {
 
@@ -18,8 +24,17 @@ public class SuperManagerFrame extends JFrame {
     private final AppContext ctx;
     private final User user;
 
-    private final DefaultTableModel linesModel = new DefaultTableModel(new Object[]{"ID", "Name", "Active"}, 0);
+    private final DefaultTableModel linesModel =
+            new DefaultTableModel(new Object[]{"ID", "Name", "Status", "Progress %"}, 0);
     private final JTable linesTable = new JTable(linesModel);
+
+    private final DefaultTableModel tasksModel =
+            new DefaultTableModel(new Object[]{"Task ID", "Product", "Progress %", "Status"}, 0);
+    private final JTable tasksTable = new JTable(tasksModel);
+
+    private final Timer progressTimer = new Timer(true);
+
+    private int selectedLineRow = -1;
 
     public SuperManagerFrame(User user, AuthService authService, AppContext ctx) {
         this.user = user;
@@ -34,14 +49,14 @@ public class SuperManagerFrame extends JFrame {
 
         initUI();
         loadLines();
+        startProgressUpdater();
     }
 
     private void initUI() {
-
         Color bgDark = new Color(30, 39, 46);
         Color bgPanel = new Color(47, 54, 64);
         Color accent = new Color(52, 152, 219);
-        Color textColor = Color.WHITE;
+        Color danger = new Color(231, 76, 60);
 
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(bgDark);
@@ -62,12 +77,10 @@ public class SuperManagerFrame extends JFrame {
 
         header.add(title, BorderLayout.WEST);
         header.add(logoutBtn, BorderLayout.EAST);
-
         root.add(header, BorderLayout.NORTH);
 
         JSplitPane split = new JSplitPane();
         split.setDividerLocation(420);
-        split.setBackground(bgDark);
         split.setBorder(null);
 
         JPanel leftPanel = new JPanel(new BorderLayout());
@@ -75,159 +88,281 @@ public class SuperManagerFrame extends JFrame {
         leftPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         JLabel leftTitle = new JLabel("Production Lines");
-        leftTitle.setForeground(textColor);
+        leftTitle.setForeground(Color.WHITE);
         leftTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        leftTitle.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
         leftPanel.add(leftTitle, BorderLayout.NORTH);
 
         styleTable(linesTable, accent);
+        applyStatusColorRenderer();
+        leftPanel.add(new JScrollPane(linesTable), BorderLayout.CENTER);
 
-        JScrollPane scroll = new JScrollPane(linesTable);
-        leftPanel.add(scroll, BorderLayout.CENTER);
+        JPanel buttons = new JPanel(new FlowLayout());
+        buttons.setOpaque(false);
 
-        JPanel leftButtons = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        leftButtons.setOpaque(false);
-
-        JButton addBtn = createFlatButton("Add Line", accent);
-        JButton toggleBtn = createFlatButton("Toggle Active", accent);
+        JButton addBtn = createFlatButton("Add", accent);
+        JButton changeStatusBtn = createFlatButton("Change Status", accent);
+        JButton deleteBtn = createFlatButton("Delete", danger);
         JButton refreshBtn = createFlatButton("Refresh", accent);
 
-        leftButtons.add(addBtn);
-        leftButtons.add(toggleBtn);
-        leftButtons.add(refreshBtn);
+        buttons.add(addBtn);
+        buttons.add(changeStatusBtn);
+        buttons.add(deleteBtn);
+        buttons.add(refreshBtn);
 
-        leftPanel.add(leftButtons, BorderLayout.SOUTH);
+        leftPanel.add(buttons, BorderLayout.SOUTH);
 
         JPanel rightPanel = new JPanel(new BorderLayout());
         rightPanel.setBackground(bgPanel);
         rightPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         JLabel rightTitle = new JLabel("Performance Overview");
-        rightTitle.setForeground(textColor);
+        rightTitle.setForeground(Color.WHITE);
         rightTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
         rightTitle.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
         rightPanel.add(rightTitle, BorderLayout.NORTH);
 
-        DefaultTableModel tasksModel = new DefaultTableModel(
-                new Object[]{"Task ID", "Product", "Progress %", "Status"},
-                0
-        );
-        JTable tasksTable = new JTable(tasksModel);
         styleTable(tasksTable, accent);
+        DefaultTableCellRenderer center = new DefaultTableCellRenderer();
+        center.setHorizontalAlignment(JLabel.CENTER);
+        for (int i = 0; i < tasksTable.getColumnCount(); i++)
+            tasksTable.getColumnModel().getColumn(i).setCellRenderer(center);
 
-        JScrollPane taskScroll = new JScrollPane(tasksTable);
-        rightPanel.add(taskScroll, BorderLayout.CENTER);
+        rightPanel.add(new JScrollPane(tasksTable), BorderLayout.CENTER);
 
-        JPanel perfPanel = new JPanel();
-        perfPanel.setBackground(bgDark);
-        perfPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        JButton addPerformanceBtn = createFlatButton("Add Performance", accent);
+        JButton viewPerformanceBtn = createFlatButton("View Performance", accent);
 
-        JLabel rLabel = createLabel("Rating:");
-        JLabel nLabel = createLabel("Note:");
+        JPanel bottomButtonsPanel = new JPanel(new FlowLayout());
+        bottomButtonsPanel.setOpaque(false);
+        bottomButtonsPanel.add(addPerformanceBtn);
+        bottomButtonsPanel.add(viewPerformanceBtn);
 
-        SpinnerNumberModel sm = new SpinnerNumberModel(5, 1, 5, 1);
-        JSpinner ratingSpin = new JSpinner(sm);
-        JTextField noteField = new JTextField(15);
+        rightPanel.add(bottomButtonsPanel, BorderLayout.SOUTH);
 
-        JButton submitBtn = createFlatButton("Submit", accent);
-
-        perfPanel.add(rLabel);
-        perfPanel.add(ratingSpin);
-        perfPanel.add(nLabel);
-        perfPanel.add(noteField);
-        perfPanel.add(submitBtn);
-
-        rightPanel.add(perfPanel, BorderLayout.SOUTH);
+        addPerformanceBtn.addActionListener(e -> addPerformanceAction());
+        viewPerformanceBtn.addActionListener(e -> viewPerformanceAction());
 
         split.setLeftComponent(leftPanel);
         split.setRightComponent(rightPanel);
-
         root.add(split, BorderLayout.CENTER);
+
         add(root);
 
-
-        addBtn.addActionListener(e -> {
-            String name = JOptionPane.showInputDialog(this, "Enter production line name:");
-            if (name != null && !name.trim().isEmpty()) {
-                ctx.getProductLineRepository().add(name.trim());
-                loadLines();
-            }
-        });
-
-        toggleBtn.addActionListener(e -> {
-            int row = linesTable.getSelectedRow();
-            if (row < 0) {
-                JOptionPane.showMessageDialog(this, "Select a line first.");
-                return;
-            }
-            String id = (String) linesModel.getValueAt(row, 0);
-            ProductLine pl = ctx.getProductLineRepository().findById(id);
-            if (pl != null) {
-                pl.setActive(!pl.isActive());
-                ctx.getProductLineRepository().update(pl);
-                loadLines();
-            }
-        });
-
+        addBtn.addActionListener(e -> addLineAction());
+        changeStatusBtn.addActionListener(e -> changeStatusAction());
+        deleteBtn.addActionListener(e -> deleteLineAction());
         refreshBtn.addActionListener(e -> loadLines());
 
-        linesTable.getSelectionModel().addListSelectionListener(ev -> {
-            tasksModel.setRowCount(0);
-            int row = linesTable.getSelectedRow();
-            if (row < 0) return;
+        linesTable.getSelectionModel().addListSelectionListener(e -> {
+            selectedLineRow = linesTable.getSelectedRow();
+            refreshTasksTable();
+        });
+    }
 
-            String id = (String) linesModel.getValueAt(row, 0);
-            List<Task> tasks = ctx.getTaskRepository().findByProductLineId(id);
+    private void startProgressUpdater() {
+        progressTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                SwingUtilities.invokeLater(() -> {
+                    refreshTasksTable();
 
-            for (Task t : tasks) {
-                tasksModel.addRow(new Object[]{
-                        t.getId(),
-                        t.getProductId(),
-                        String.format("%.2f", t.getProgressPercent()),
-                        t.getStatus()
+                    for (int i = 0; i < linesModel.getRowCount(); i++) {
+                        String lineId = ((String) linesModel.getValueAt(i, 0)).trim();
+                        List<Task> tasks = ctx.getTaskRepository().findByProductLineId(lineId);
+                        double progress = calculateAverageProgress(tasks);
+                        linesModel.setValueAt(String.format("%.2f%%", progress), i, 3);
+                    }
                 });
             }
-        });
+        }, 0, 1000);
+    }
 
-        submitBtn.addActionListener(e -> {
-            int row = linesTable.getSelectedRow();
-            if (row < 0) {
-                JOptionPane.showMessageDialog(this, "Select a production line first.");
+    private void refreshTasksTable() {
+        tasksModel.setRowCount(0);
+        int row = linesTable.getSelectedRow();
+        if (row < 0) return;
+
+        String lineId = ((String) linesModel.getValueAt(row, 0)).trim();
+        ProductLine pl = ctx.getProductLineRepository().findById(lineId);
+        if (pl == null) return;
+
+        List<Task> tasks = ctx.getTaskRepository().findByProductLineId(lineId);
+
+        ProductRepository productRepo = ctx.getProductRepository();
+        MaterialRepository materialRepo = ctx.getMaterialRepository();
+
+        for (Task t : tasks) {
+            if (pl.getStatus() == ProductionLineStatus.ACTIVE &&
+                    t.getStatus() == Task.Status.IN_PROGRESS) {
+
+                Map<String, Integer> perUnitMaterials = productRepo.getComponentsForProduct(t.getProductId());
+
+                int increment = Math.min(5, t.getTotalQuantity() - t.getCompletedQuantity());
+
+                if (materialRepo.hasEnoughForProduction(perUnitMaterials, increment)) {
+                    t.incrementCompleted(increment);
+                    materialRepo.consumeForProduction(perUnitMaterials, increment);
+
+                    if (t.getCompletedQuantity() >= t.getTotalQuantity()) {
+                        t.setStatus(Task.Status.COMPLETED);
+                    }
+                } else {
+                    t.setStatus(Task.Status.CANCELLED);
+                }
+            }
+
+            tasksModel.addRow(new Object[]{
+                    t.getId(),
+                    t.getProductId(),
+                    String.format("%.2f", t.getProgressPercent()),
+                    t.getStatus()
+            });
+        }
+    }
+
+    private void addPerformanceAction() {
+        int row = linesTable.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Please select a Production Line first!",
+                    "No Line Selected",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String lineId = (String) linesModel.getValueAt(row, 0);
+        ProductLine pl = ctx.getProductLineRepository().findById(lineId);
+
+        JPanel panel = new JPanel(new GridLayout(2, 2));
+        JTextField ratingField = new JTextField();
+        JTextField noteField = new JTextField();
+        panel.add(new JLabel("Rating (1-5):"));
+        panel.add(ratingField);
+        panel.add(new JLabel("Note:"));
+        panel.add(noteField);
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "Add Performance", JOptionPane.OK_CANCEL_OPTION);
+        if (result == JOptionPane.OK_OPTION) {
+            try {
+                int rating = Integer.parseInt(ratingField.getText().trim());
+                String note = noteField.getText().trim();
+                if (rating < 1 || rating > 5) throw new Exception();
+
+                pl.addPerformance("Line Overall", rating, note);
+                ctx.getProductLineRepository().update(pl);
+
+                JOptionPane.showMessageDialog(this, "Performance added successfully!");
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Invalid rating! Enter 1-5.");
+            }
+        }
+    }
+
+    private void viewPerformanceAction() {
+        int row = linesTable.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Please select a Production Line first!",
+                    "No Line Selected",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String lineId = (String) linesModel.getValueAt(row, 0);
+        ProductLine pl = ctx.getProductLineRepository().findById(lineId);
+        if (pl == null) return;
+
+        List<ProductLine.PerformanceEntry> entries = pl.getPerformanceEntries();
+
+        DefaultTableModel model = new DefaultTableModel(
+                new Object[]{"Rating", "Note", "Date"}, 0
+        );
+
+        for (ProductLine.PerformanceEntry e : entries) {
+            model.addRow(new Object[]{
+                    e.getRating(),
+                    e.getNote(),
+                    e.getCreatedAt()
+            });
+        }
+
+        JTable table = new JTable(model);
+        JScrollPane scrollPane = new JScrollPane(table);
+        scrollPane.setPreferredSize(new Dimension(500, 300));
+
+        JButton deleteBtn = new JButton("Delete Selected Note");
+
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(scrollPane, BorderLayout.CENTER);
+        panel.add(deleteBtn, BorderLayout.SOUTH);
+
+        JDialog dialog = new JDialog(this, "Performance Notes - " + pl.getName(), true);
+        dialog.setContentPane(panel);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+
+        deleteBtn.addActionListener(e -> {
+            int selectedRow = table.getSelectedRow();
+            if (selectedRow < 0) {
+                JOptionPane.showMessageDialog(dialog,
+                        "Please select a note to delete.");
                 return;
             }
-            String id = (String) linesModel.getValueAt(row, 0);
-            ProductLine pl = ctx.getProductLineRepository().findById(id);
-            if (pl == null) return;
 
-            int rating = (Integer) ratingSpin.getValue();
-            String note = noteField.getText();
+            int confirm = JOptionPane.showConfirmDialog(dialog,
+                    "Delete selected note?",
+                    "Confirm Delete",
+                    JOptionPane.YES_NO_OPTION);
 
-            int tRow = tasksTable.getSelectedRow();
-            String taskId = (tRow >= 0) ? (String) tasksModel.getValueAt(tRow, 0) : null;
-
-            pl.addPerformance(taskId, rating, note == null ? "" : note);
-            ctx.getProductLineRepository().update(pl);
-
-            JOptionPane.showMessageDialog(this, "Performance Submitted");
-            noteField.setText("");
+            if (confirm == JOptionPane.YES_OPTION) {
+                if (pl.removePerformanceEntryAt(selectedRow)) {
+                    ctx.getProductLineRepository().update(pl);
+                    model.removeRow(selectedRow);
+                }
+            }
         });
+
+        dialog.setVisible(true);
     }
 
-    private JButton createFlatButton(String text, Color accent) {
+
+    private void applyStatusColorRenderer() {
+        DefaultTableCellRenderer renderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(
+                    JTable table, Object value, boolean isSelected,
+                    boolean hasFocus, int row, int column) {
+
+                super.getTableCellRendererComponent(
+                        table, value, isSelected, hasFocus, row, column);
+
+                setHorizontalAlignment(CENTER);
+
+                if (value instanceof ProductionLineStatus status) {
+                    switch (status) {
+                        case ACTIVE -> setForeground(new Color(46, 204, 113));
+                        case MAINTENANCE -> setForeground(new Color(241, 196, 15));
+                        case STOPPED -> setForeground(new Color(231, 76, 60));
+                    }
+                } else {
+                    setForeground(Color.WHITE);
+                }
+
+                return this;
+            }
+        };
+
+        linesTable.getColumnModel().getColumn(2).setCellRenderer(renderer);
+    }
+
+    private JButton createFlatButton(String text, Color color) {
         JButton btn = new JButton(text);
-        btn.setFocusPainted(false);
-        btn.setBackground(accent);
+        btn.setBackground(color);
         btn.setForeground(Color.WHITE);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setFocusPainted(false);
         btn.setBorder(BorderFactory.createEmptyBorder(8, 16, 8, 16));
         return btn;
-    }
-
-    private JLabel createLabel(String text) {
-        JLabel lbl = new JLabel(text);
-        lbl.setForeground(Color.WHITE);
-        lbl.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        return lbl;
     }
 
     private void styleTable(JTable table, Color accent) {
@@ -235,20 +370,88 @@ public class SuperManagerFrame extends JFrame {
         table.setForeground(Color.WHITE);
         table.setRowHeight(28);
         table.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 15));
+
         table.getTableHeader().setBackground(accent);
         table.getTableHeader().setForeground(Color.WHITE);
-
-        DefaultTableCellRenderer center = new DefaultTableCellRenderer();
-        center.setHorizontalAlignment(JLabel.CENTER);
-        for (int i = 0; i < table.getColumnCount(); i++)
-            table.getColumnModel().getColumn(i).setCellRenderer(center);
+        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 15));
     }
 
     private void loadLines() {
         linesModel.setRowCount(0);
         for (ProductLine pl : ctx.getProductLineRepository().findAll()) {
-            linesModel.addRow(new Object[]{pl.getId(), pl.getName(), pl.isActive()});
+            List<Task> tasks = ctx.getTaskRepository().findByProductLineId(pl.getId());
+            double progress = calculateAverageProgress(tasks);
+
+            linesModel.addRow(new Object[]{
+                    pl.getId(),
+                    pl.getName(),
+                    pl.getStatus(),
+                    String.format("%.2f%%", progress)
+            });
+        }
+    }
+
+    private double calculateAverageProgress(List<Task> tasks) {
+        if (tasks.isEmpty()) return 0.0;
+        double total = 0.0;
+        for (Task t : tasks) total += t.getProgressPercent();
+        return total / tasks.size();
+    }
+
+    private void addLineAction() {
+        JPanel panel = new JPanel(new GridLayout(2, 2, 5, 5));
+        JTextField nameField = new JTextField();
+        JComboBox<ProductionLineStatus> statusCombo =
+                new JComboBox<>(ProductionLineStatus.values());
+        panel.add(new JLabel("Name:"));
+        panel.add(nameField);
+        panel.add(new JLabel("Status:"));
+        panel.add(statusCombo);
+
+        int result = JOptionPane.showConfirmDialog(this, panel,
+                "Add Production Line", JOptionPane.OK_CANCEL_OPTION);
+        if (result == JOptionPane.OK_OPTION && !nameField.getText().trim().isEmpty()) {
+            ctx.getProductLineRepository().add(nameField.getText().trim(),
+                    (ProductionLineStatus) statusCombo.getSelectedItem());
+            loadLines();
+        }
+    }
+
+    private void changeStatusAction() {
+        int row = linesTable.getSelectedRow();
+        if (row < 0) return;
+
+        String id = (String) linesModel.getValueAt(row, 0);
+        ProductLine pl = ctx.getProductLineRepository().findById(id);
+
+        ProductionLineStatus newStatus = (ProductionLineStatus) JOptionPane.showInputDialog(
+                this,
+                "Select new status:",
+                "Change Status",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                ProductionLineStatus.values(),
+                pl.getStatus()
+        );
+
+        if (newStatus != null) {
+            pl.setStatus(newStatus);
+            ctx.getProductLineRepository().update(pl);
+            loadLines();
+        }
+    }
+
+    private void deleteLineAction() {
+        int row = linesTable.getSelectedRow();
+        if (row < 0) return;
+        String id = (String) linesModel.getValueAt(row, 0);
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Delete selected production line?",
+                "Confirm",
+                JOptionPane.YES_NO_OPTION);
+        if (confirm == JOptionPane.YES_OPTION) {
+            ctx.getProductLineRepository().deleteById(id);
+            loadLines();
         }
     }
 }

@@ -1,16 +1,13 @@
 package com.factory.model;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 public class Task {
+
     public enum Status {
-        PENDING,
-        RESERVED,
         IN_PROGRESS,
         COMPLETED,
-        CANCELLED,
-        POSTPONED
+        CANCELLED
     }
 
     private final String id;
@@ -19,14 +16,15 @@ public class Task {
     private final String clientName;
     private final int totalQuantity;
     private int completedQuantity = 0;
-    private Status status = Status.PENDING;
+    private Status status = Status.IN_PROGRESS;
     private final LocalDateTime createdAt;
     private LocalDateTime startedAt;
     private LocalDateTime requiredBy;
     private LocalDateTime finishedAt;
 
-    public Task(String productId, String productLineId, int totalQuantity, String clientName, LocalDateTime requiredBy) {
-        this.id = UUID.randomUUID().toString();
+    public Task(String id, String productId, String productLineId, int totalQuantity,
+                String clientName, LocalDateTime requiredBy) {
+        this.id = id;
         this.productId = productId;
         this.productLineId = productLineId;
         this.totalQuantity = totalQuantity;
@@ -45,9 +43,12 @@ public class Task {
     public void setCompletedQuantity(int completedQuantity) { this.completedQuantity = completedQuantity; }
 
     public void incrementCompleted(int amount) {
-        if (amount <= 0) throw new IllegalArgumentException("amount must be > 0");
+        if (amount <= 0) return;
         completedQuantity += amount;
-        if (completedQuantity > totalQuantity) completedQuantity = totalQuantity;
+        if (completedQuantity >= totalQuantity) {
+            completedQuantity = totalQuantity;
+            status = Status.COMPLETED;
+        }
     }
 
     public double getProgressPercent() {
