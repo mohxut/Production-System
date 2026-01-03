@@ -133,7 +133,7 @@ public AdminFrame(User user,  MaterialRepository repo ,AuthService authService) 
         addDialog.setLayout(null);
         addDialog.setLocationRelativeTo(null);
 
-        // الحقول
+
         JLabel nameLabel = new JLabel("Name:");
         JTextField nameField = new JTextField();
 
@@ -151,7 +151,6 @@ public AdminFrame(User user,  MaterialRepository repo ,AuthService authService) 
 
         JButton submitBtn = new JButton("Add");
 
-        // تحديد المواقع
         nameLabel.setBounds(40, 20, 100, 25);
         nameField.setBounds(140, 20, 200, 25);
 
@@ -169,7 +168,6 @@ public AdminFrame(User user,  MaterialRepository repo ,AuthService authService) 
 
         submitBtn.setBounds(140, 220, 100, 30);
 
-        // إضافة العناصر
         addDialog.add(nameLabel);
         addDialog.add(nameField);
         addDialog.add(categoryLabel);
@@ -183,7 +181,6 @@ public AdminFrame(User user,  MaterialRepository repo ,AuthService authService) 
 
         addDialog.add(submitBtn);
 
-        // زر الإضافة
         submitBtn.addActionListener(e -> {
             String name = nameField.getText();
             String category = categoryField.getText();
@@ -205,15 +202,12 @@ public AdminFrame(User user,  MaterialRepository repo ,AuthService authService) 
         viewDialog.setLocationRelativeTo(null);
         viewDialog.setLayout(new BorderLayout());
 
-        // أسماء الأعمدة
         String[] columnNames = {
                 "ID", "Name", "Category", "Price", "Quantity", "Min Quantity"
         };
 
-        // جلب البيانات من الريبو
         java.util.List<Material> materials = new ArrayList<>(MatRepo.findAll());
 
-        // تحويل البيانات إلى مصفوفة للجدول
         Object[][] data = new Object[materials.size()][6];
         for (int i = 0; i < materials.size(); i++) {
             Material m = materials.get(i);
@@ -243,7 +237,7 @@ public AdminFrame(User user,  MaterialRepository repo ,AuthService authService) 
             return;
         }
 
-        Material material = matches.get(0); // نفترض أول تطابق
+        Material material = matches.get(0);
 
         JTextField priceField = new JTextField(String.valueOf(material.getPrice()));
         JTextField quantityField = new JTextField(String.valueOf(material.getQuantity()));
@@ -352,7 +346,7 @@ public AdminFrame(User user,  MaterialRepository repo ,AuthService authService) 
             return;
         }
 
-        Material material = matches.get(0); // أول تطابق
+        Material material = matches.get(0);
         MatRepo.remove(material.getId());
         MatRepo.saveToFill();
         JOptionPane.showMessageDialog(this, "Item deleted successfully!");
@@ -368,4 +362,3 @@ public AdminFrame(User user,  MaterialRepository repo ,AuthService authService) 
     }
 
 }
-// admin123
